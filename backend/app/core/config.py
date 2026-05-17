@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import quote_plus
 
 LogFormat = Literal["json", "text"]
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
 
@@ -29,7 +30,10 @@ class Settings(BaseSettings):
 
     api_v1_prefix: str = "/api/v1"
 
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # NoDecode: Render sets CORS_ORIGINS=https://app.vercel.app (not JSON array).
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     database_url: str = Field(
         default="postgresql+asyncpg://synapse:synapse@localhost:5432/synapse"
@@ -82,7 +86,21 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("github_app_private_key_b64", mode="before")
+    @classmethod
+    def strip_private_key_b64_quotes(cls, value: str) -> str:
+        if isinstance(value, str):
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                return value[1:-1]
         return value
 
     @staticmethod
