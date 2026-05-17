@@ -50,6 +50,20 @@ class Settings(BaseSettings):
     llm_retry_base_delay_seconds: float = 1.0
     llm_max_diff_chars: int = 120_000
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Accept Supabase `postgresql://` URLs and ensure SSL for hosted Postgres."""
+        if not isinstance(value, str):
+            return value
+        if value.startswith("postgresql://"):
+            value = value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        host = value.split("@")[-1].split("/")[0].lower()
+        if "supabase.com" in host and "ssl=" not in value and "sslmode=" not in value:
+            separator = "&" if "?" in value else "?"
+            value = f"{value}{separator}ssl=require"
+        return value
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:

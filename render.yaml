@@ -1,0 +1,58 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploy: Dashboard → New → Blueprint → connect this repo.
+# Set secrets when prompted (DATABASE_URL, Redis, GitHub, OpenAI, CORS_ORIGINS).
+
+envVarGroups:
+  - name: synapse-backend
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_FORMAT
+        value: json
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLM_DEFAULT_PROVIDER
+        value: openai
+      - key: LLM_DEFAULT_MODEL
+        value: gpt-4o
+
+services:
+  - type: web
+    name: synapse-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    healthCheckPath: /api/v1/health
+    envVars:
+      - fromGroup: synapse-backend
+
+  - type: worker
+    name: synapse-celery
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    dockerCommand: celery -A app.celery_app worker --loglevel=info -Q reviews
+    envVars:
+      - fromGroup: synapse-backend

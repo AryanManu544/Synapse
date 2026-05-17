@@ -11,7 +11,8 @@ from app.core.config import Settings, get_settings
 def _to_sync_database_url(async_url: str) -> str:
     """Convert async SQLAlchemy URL to a sync driver URL."""
     if async_url.startswith("postgresql+asyncpg://"):
-        return async_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        sync_url = async_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        return sync_url.replace("ssl=require", "sslmode=require")
     return async_url
 
 
