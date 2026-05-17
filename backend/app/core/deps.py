@@ -1,0 +1,52 @@
+from collections.abc import AsyncGenerator
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.core.config import Settings, get_settings
+
+_engine = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def get_async_engine(settings: Settings | None = None):
+    """Lazy-initialize async SQLAlchemy engine."""
+    global _engine, _session_factory
+    if settings is None:
+        settings = get_settings()
+    if _engine is None:
+        _engine = create_async_engine(
+            str(settings.database_url),
+            echo=settings.debug,
+            pool_pre_ping=True,
+        )
+        _session_factory = async_sessionmaker(
+            bind=_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+    return _engine
+
+
+async def get_db_session(
+    _settings: Annotated[Settings, Depends(get_settings)],
+) -> AsyncGenerator[AsyncSession, None]:
+    """Yield a database session per request."""
+    get_async_engine(_settings)
+    if _session_factory is None:
+        raise RuntimeError("Database session factory is not initialized.")
+    async with _session_factory() as session:
+        yield session
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Return the async session factory, initializing the engine if needed."""
+    get_async_engine(get_settings())
+    if _session_factory is None:
+        raise RuntimeError("Database session factory is not initialized.")
+    return _session_factory
+
+
+DbSession = Annotated[AsyncSession, Depends(get_db_session)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
