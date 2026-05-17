@@ -34,7 +34,8 @@ envVarGroups:
         sync: false
       - key: GITHUB_APP_ID
         sync: false
-      - key: GITHUB_APP_PRIVATE_KEY
+      # base64 -i your-app.private-key.pem | tr -d '\n'
+      - key: GITHUB_APP_PRIVATE_KEY_B64
         sync: false
       - key: OPENAI_API_KEY
         sync: false

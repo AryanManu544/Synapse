@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     github_app_id: str = ""
     github_app_private_key_path: str = ""
     github_app_private_key: str = ""
+    # Single-line base64 of the .pem file — best for Render env vars.
+    github_app_private_key_b64: str = ""
 
     openai_api_key: str = ""
     anthropic_api_key: str = ""

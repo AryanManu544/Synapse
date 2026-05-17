@@ -1,11 +1,10 @@
-from pathlib import Path
-
 from github import Auth, Github
 from github.GithubException import GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 from app.core.config import Settings
+from app.core.github_key import GitHubKeyError, load_github_app_private_key
 
 
 class GitHubServiceError(Exception):
@@ -19,17 +18,10 @@ class GitHubService:
         self._settings = settings
 
     def _load_private_key(self) -> str:
-        if self._settings.github_app_private_key:
-            return self._settings.github_app_private_key.replace("\\n", "\n")
-
-        if not self._settings.github_app_private_key_path:
-            raise GitHubServiceError("GitHub App private key is not configured.")
-
-        key_path = Path(self._settings.github_app_private_key_path)
-        if not key_path.is_file():
-            raise GitHubServiceError(f"GitHub App private key not found: {key_path}")
-
-        return key_path.read_text(encoding="utf-8")
+        try:
+            return load_github_app_private_key(self._settings)
+        except GitHubKeyError as exc:
+            raise GitHubServiceError(str(exc)) from exc
 
     def get_github_client(self, installation_id: int) -> Github:
         """Return an authenticated PyGithub client for a GitHub App installation."""
