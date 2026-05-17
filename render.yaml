@@ -11,8 +11,17 @@ envVarGroups:
         value: "false"
       - key: LOG_FORMAT
         value: json
-      - key: DATABASE_URL
+      # Supabase (recommended): set these and leave DATABASE_URL unset on Render.
+      - key: DB_HOST
         sync: false
+      - key: DB_PORT
+        value: "6543"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: postgres
       - key: REDIS_URL
         sync: false
       - key: CELERY_BROKER_URL

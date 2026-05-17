@@ -1,7 +1,9 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy.engine import make_url
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
@@ -13,11 +15,21 @@ from app.core.deps import get_session_factory
 from app.models.orm import pull_request, review_finding, review_rules  # noqa: F401
 from app.services.dashboard_service import seed_default_rules
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown hooks."""
     configure_logging(debug=settings.debug, log_format=settings.log_format)
+    db = make_url(settings.database_url)
+    logger.info(
+        "Database target user=%s host=%s port=%s database=%s",
+        db.username,
+        db.host,
+        db.port,
+        db.database,
+    )
     engine = get_async_engine(settings)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

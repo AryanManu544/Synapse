@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import quote_plus
 
 LogFormat = Literal["json", "text"]
 
-from pydantic import Field, PostgresDsn, RedisDsn, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -29,10 +31,17 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
-    database_url: PostgresDsn = Field(
+    database_url: str = Field(
         default="postgresql+asyncpg://synapse:synapse@localhost:5432/synapse"
     )
-    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")
+    # Prefer these on Render/Supabase — password is not URL-encoded manually.
+    db_host: str = ""
+    db_port: int = 5432
+    db_user: str = "postgres"
+    db_password: str = ""
+    db_name: str = "postgres"
+
+    redis_url: str = Field(default="redis://localhost:6379/0")
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
@@ -60,7 +69,8 @@ class Settings(BaseSettings):
             return value
         if value.startswith("postgresql://"):
             value = value.replace("postgresql://", "postgresql+asyncpg://", 1)
-        host = value.split("@")[-1].split("/")[0].lower()
+        parsed = make_url(value)
+        host = (parsed.host or "").lower()
         if "supabase.com" in host and "ssl=" not in value and "sslmode=" not in value:
             separator = "&" if "?" in value else "?"
             value = f"{value}{separator}ssl=require"
@@ -73,13 +83,55 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @staticmethod
+    def _build_database_url(host: str, port: int, user: str, password: str, name: str) -> str:
+        url = (
+            f"postgresql+asyncpg://{quote_plus(user)}:{quote_plus(password)}"
+            f"@{host}:{port}/{name}"
+        )
+        if "supabase.com" in host.lower():
+            url += "?ssl=require"
+        return url
+
     @model_validator(mode="after")
-    def default_celery_urls(self) -> Settings:
-        redis = str(self.redis_url)
+    def assemble_and_validate_urls(self) -> Settings:
+        if self.db_password and self.db_host:
+            self.database_url = self._build_database_url(
+                host=self.db_host,
+                port=self.db_port,
+                user=self.db_user,
+                password=self.db_password,
+                name=self.db_name,
+            )
+
+        parsed = make_url(self.database_url)
+        password = parsed.password or ""
+        username = parsed.username or ""
+        host = (parsed.host or "").lower()
+
+        if "[" in self.database_url or password in {"", "[YOUR-PASSWORD]"}:
+            raise ValueError(
+                "Database password missing or still a placeholder. On Render, set "
+                "DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME (recommended) or a "
+                "complete DATABASE_URL with the real Supabase database password."
+            )
+
+        if "pooler.supabase.com" in host:
+            if username == "postgres":
+                raise ValueError(
+                    "Supabase pooler username must be postgres.<project-ref>, not 'postgres'. "
+                    "Set DB_USER from Supabase → Database → Connection string (Transaction, 6543)."
+                )
+            if not username.startswith("postgres."):
+                raise ValueError(
+                    f"Supabase pooler DB_USER must be postgres.<project-ref>, got '{username}'."
+                )
+
         if not self.celery_broker_url:
-            self.celery_broker_url = redis
+            self.celery_broker_url = self.redis_url
         if not self.celery_result_backend:
-            self.celery_result_backend = redis
+            self.celery_result_backend = self.redis_url
+
         return self
 
 
