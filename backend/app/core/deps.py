@@ -5,6 +5,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import Settings, get_settings
+from app.core.database import asyncpg_connect_args
 
 _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -16,11 +17,14 @@ def get_async_engine(settings: Settings | None = None):
     if settings is None:
         settings = get_settings()
     if _engine is None:
-        _engine = create_async_engine(
-            str(settings.database_url),
-            echo=settings.debug,
-            pool_pre_ping=True,
-        )
+        database_url = str(settings.database_url)
+        engine_kwargs: dict = {
+            "echo": settings.debug,
+            "pool_pre_ping": True,
+        }
+        if connect_args := asyncpg_connect_args(database_url):
+            engine_kwargs["connect_args"] = connect_args
+        _engine = create_async_engine(database_url, **engine_kwargs)
         _session_factory = async_sessionmaker(
             bind=_engine,
             class_=AsyncSession,

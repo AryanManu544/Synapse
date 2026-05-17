@@ -5,7 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
+from app.core.database import psycopg_connect_args
 
 
 def _to_sync_database_url(async_url: str) -> str:
@@ -19,10 +20,11 @@ def _to_sync_database_url(async_url: str) -> str:
 @lru_cache
 def get_sync_engine() -> Engine:
     settings = get_settings()
-    return create_engine(
-        _to_sync_database_url(str(settings.database_url)),
-        pool_pre_ping=True,
-    )
+    database_url = _to_sync_database_url(str(settings.database_url))
+    engine_kwargs: dict = {"pool_pre_ping": True}
+    if connect_args := psycopg_connect_args(str(settings.database_url)):
+        engine_kwargs["connect_args"] = connect_args
+    return create_engine(database_url, **engine_kwargs)
 
 
 @lru_cache
