@@ -66,6 +66,15 @@ class Settings(BaseSettings):
     llm_max_retries: int = 3
     llm_retry_base_delay_seconds: float = 1.0
     llm_max_diff_chars: int = 120_000
+    # Render free tier (512MB): run reviews in-process instead of a Celery worker.
+    run_reviews_inline: bool = False
+
+    @field_validator("run_reviews_inline", mode="before")
+    @classmethod
+    def parse_run_reviews_inline(cls, value: str | bool) -> bool:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
 
     @field_validator("database_url", mode="before")
     @classmethod

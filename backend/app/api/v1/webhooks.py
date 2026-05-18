@@ -4,7 +4,7 @@ from typing import Annotated
 
 import redis
 from celery.exceptions import CeleryError
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 from kombu.exceptions import OperationalError
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
@@ -22,6 +22,7 @@ from app.models.schemas.github_webhook import (
 from app.models.schemas.webhook import WebhookAcceptedResponse
 from app.services.github_service import GitHubService
 from app.services.pull_request_service import PullRequestService
+from app.tasks.review_runner import execute_pr_review
 from app.tasks.review_tasks import process_pr_review
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ def _get_pull_request_service(settings: Settings) -> PullRequestService:
 )
 async def github_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     settings: SettingsDep,
     x_hub_signature_256: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
     x_github_event: Annotated[str | None, Header(alias="X-GitHub-Event")] = None,
@@ -142,13 +144,17 @@ async def github_webhook(
                 event_type=x_github_event or "pull_request",
             )
 
-        process_pr_review.delay(
-            record_id=str(record.id),
-            installation_id=pr_event.installation.id,
-            repository_full_name=repository,
-            pr_number=pr_event.number,
-            head_sha=head_sha,
-        )
+        review_kwargs = {
+            "record_id": str(record.id),
+            "installation_id": pr_event.installation.id,
+            "repository_full_name": repository,
+            "pr_number": pr_event.number,
+            "head_sha": head_sha,
+        }
+        if settings.run_reviews_inline:
+            background_tasks.add_task(execute_pr_review, **review_kwargs)
+        else:
+            process_pr_review.delay(**review_kwargs)
     except HTTPException:
         idempotency.release(repository, head_sha)
         raise
@@ -191,16 +197,28 @@ async def github_webhook(
             detail="Unexpected error processing webhook",
         ) from exc
 
-    logger.info(
-        "Enqueued Celery review task: %s#%s action=%s record_id=%s head=%s",
-        pr_event.repository.full_name,
-        pr_event.number,
-        pr_event.action,
-        record.id,
-        head_sha[:7],
-    )
+    if settings.run_reviews_inline:
+        logger.info(
+            "Scheduled inline PR review: %s#%s action=%s record_id=%s head=%s",
+            pr_event.repository.full_name,
+            pr_event.number,
+            pr_event.action,
+            record.id,
+            head_sha[:7],
+        )
+        message = "Pull request accepted for inline background review"
+    else:
+        logger.info(
+            "Enqueued Celery review task: %s#%s action=%s record_id=%s head=%s",
+            pr_event.repository.full_name,
+            pr_event.number,
+            pr_event.action,
+            record.id,
+            head_sha[:7],
+        )
+        message = "Pull request accepted for background review"
 
     return WebhookAcceptedResponse(
-        message="Pull request accepted for background review",
+        message=message,
         pull_request_id=str(record.id),
     )

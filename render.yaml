@@ -40,6 +40,9 @@ envVarGroups:
         value: openai
       - key: LLM_DEFAULT_MODEL
         value: gpt-4o
+      # Free tier (512MB): no separate Celery worker — reviews run in the API process.
+      - key: RUN_REVIEWS_INLINE
+        value: "true"
 
 services:
   - type: web
