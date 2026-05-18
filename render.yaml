@@ -1,5 +1,5 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
-# Free tier: Background Workers are not available — API runs Celery via backend/start.sh.
+# Free tier (512MB): no Background Worker — reviews run in the API process.
 
 envVarGroups:
   - name: synapse-backend
@@ -36,6 +36,10 @@ envVarGroups:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_API_BASE
+        value: https://api.groq.com/openai/v1
       - key: LLM_DEFAULT_PROVIDER
         value: openai
       - key: LLM_DEFAULT_MODEL

@@ -61,7 +61,11 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     anthropic_api_key: str = ""
-    llm_default_provider: Literal["openai", "anthropic"] = "openai"
+    groq_api_key: str = ""
+    # OpenAI-compatible base URL for Groq (https://api.groq.com/openai/v1).
+    groq_api_base: str = "https://api.groq.com/openai/v1"
+
+    llm_default_provider: Literal["openai", "anthropic", "groq"] = "openai"
     llm_default_model: str = "gpt-4o"
     llm_max_retries: int = 3
     llm_retry_base_delay_seconds: float = 1.0

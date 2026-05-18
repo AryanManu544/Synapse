@@ -47,6 +47,25 @@ Rules:
 - Return ONLY valid JSON matching the required schema. No markdown fences or prose outside JSON.
 """
 
+GROQ_JSON_SHAPE: Final[str] = """
+Your entire reply MUST be one JSON object (no markdown code fences). Exact shape:
+{
+  "comments": [
+    {
+      "file_path": "path/in/repo.ext",
+      "line_number": 42,
+      "severity": "Low",
+      "issue_type": "security",
+      "suggested_fix": "Concrete fix text."
+    }
+  ]
+}
+Rules for JSON:
+- "severity" must be exactly one of: "Low", "Medium", "High" (capital first letter).
+- "issue_type" must be one of: "security", "performance", "typing", "logic".
+- If there are no issues, return {"comments": []}.
+"""
+
 
 class LLMReviewerError(Exception):
     """Base error for LLM review failures."""
@@ -165,18 +184,30 @@ class LLMReviewer(BaseService):
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client: OpenAI | None = None
+        self._openai_client: OpenAI | None = None
+        self._groq_client: OpenAI | None = None
 
-    def _get_client(self) -> OpenAI:
+    def _get_openai_client(self) -> OpenAI:
         if not self._settings.openai_api_key:
             raise LLMReviewerError("OPENAI_API_KEY is not configured.")
-
-        if self._client is None:
-            self._client = OpenAI(
+        if self._openai_client is None:
+            self._openai_client = OpenAI(
                 api_key=self._settings.openai_api_key,
                 max_retries=0,
             )
-        return self._client
+        return self._openai_client
+
+    def _get_groq_client(self) -> OpenAI:
+        if not self._settings.groq_api_key:
+            raise LLMReviewerError("GROQ_API_KEY is not configured.")
+        if self._groq_client is None:
+            base = self._settings.groq_api_base.rstrip("/")
+            self._groq_client = OpenAI(
+                api_key=self._settings.groq_api_key,
+                base_url=base,
+                max_retries=0,
+            )
+        return self._groq_client
 
     def review_diff(self, raw_diff: str) -> CodeReviewResult:
         """
@@ -204,7 +235,7 @@ class LLMReviewer(BaseService):
                 last_error = exc
                 sleep_for = delay * (2 ** (attempt - 1))
                 logger.warning(
-                    "OpenAI rate limit (attempt %d/%d); sleeping %.1fs",
+                    "LLM rate limit (attempt %d/%d); sleeping %.1fs",
                     attempt,
                     max_retries,
                     sleep_for,
@@ -231,7 +262,7 @@ class LLMReviewer(BaseService):
                         ) from exc
                     continue
 
-                raise LLMReviewerError(f"OpenAI API error: {exc}") from exc
+                raise LLMReviewerError(f"LLM API error: {exc}") from exc
             except (LLMMalformedResponseError, ValidationError) as exc:
                 last_error = exc
                 logger.warning(
@@ -249,7 +280,7 @@ class LLMReviewer(BaseService):
                     time.sleep(delay_sleep)
             except APITimeoutError as exc:
                 last_error = exc
-                logger.warning("OpenAI timeout (attempt %d/%d)", attempt, max_retries)
+                logger.warning("LLM timeout (attempt %d/%d)", attempt, max_retries)
                 if attempt == max_retries:
                     raise LLMReviewerError("LLM request timed out after retries") from exc
                 time.sleep(delay * (2 ** (attempt - 1)))
@@ -259,7 +290,14 @@ class LLMReviewer(BaseService):
         ) from last_error
 
     def _invoke_structured_review(self, diff: str, *, repair_mode: bool) -> CodeReviewResult:
-        client = self._get_client()
+        if self._settings.llm_default_provider == "groq":
+            return self._invoke_groq_json(diff, repair_mode=repair_mode)
+        if self._settings.llm_default_provider == "anthropic":
+            raise LLMReviewerError("Anthropic is not implemented; use openai or groq.")
+        return self._invoke_openai_parse(diff, repair_mode=repair_mode)
+
+    def _invoke_openai_parse(self, diff: str, *, repair_mode: bool) -> CodeReviewResult:
+        client = self._get_openai_client()
         user_content = _build_user_prompt(diff, repair_mode=repair_mode)
 
         try:
@@ -288,6 +326,33 @@ class LLMReviewer(BaseService):
             return _parse_fallback_json(raw)
 
         raise LLMMalformedResponseError("Model returned empty content")
+
+    def _invoke_groq_json(self, diff: str, *, repair_mode: bool) -> CodeReviewResult:
+        client = self._get_groq_client()
+        user_content = _build_user_prompt(diff, repair_mode=repair_mode)
+        system = SYSTEM_PROMPT + GROQ_JSON_SHAPE
+
+        try:
+            completion = client.chat.completions.create(
+                model=self._settings.llm_default_model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+        except RateLimitError:
+            raise
+        except APIError as exc:
+            if _is_token_limit_error(exc):
+                raise
+            raise LLMReviewerError(f"Groq API error: {exc}") from exc
+
+        raw = completion.choices[0].message.content
+        if not raw:
+            raise LLMMalformedResponseError("Groq returned empty content")
+        return _parse_fallback_json(raw)
 
     def review_diff_from_raw(self, raw_diff: str) -> CodeReviewResult:
         """Alias for ``review_diff`` — filters and reviews in one call."""
