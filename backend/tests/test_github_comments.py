@@ -45,7 +45,10 @@ def test_format_review_summary_body_with_findings() -> None:
 
     assert "Summary" in body
     assert "| 🔴 High | 1 |" in body
-    assert "2** inline" in body
+    assert "2** finding" in body
+    assert "Findings (quick view)" in body
+    assert "`a.py:1`" in body
+    assert "`b.py:2`" in body
 
 
 def test_format_review_summary_body_empty() -> None:

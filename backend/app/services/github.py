@@ -63,16 +63,28 @@ def format_review_summary_body(result: CodeReviewResult) -> str:
     medium = sum(1 for c in result.comments if c.severity == ReviewSeverity.MEDIUM)
     low = sum(1 for c in result.comments if c.severity == ReviewSeverity.LOW)
 
-    return (
-        f"## 🔍 {BOT_NAME} — Summary\n\n"
-        f"| Severity | Count |\n"
-        f"|----------|------:|\n"
-        f"| 🔴 High | {high} |\n"
-        f"| 🟡 Medium | {medium} |\n"
-        f"| 🟢 Low | {low} |\n\n"
-        f"**{len(result.comments)}** inline comment(s) were posted on specific lines.\n\n"
-        f"{BOT_FOOTER}"
-    )
+    parts = [
+        f"## 🔍 {BOT_NAME} — Summary\n\n",
+        "| Severity | Count |\n",
+        "|----------|------:|\n",
+        f"| 🔴 High | {high} |\n",
+        f"| 🟡 Medium | {medium} |\n",
+        f"| 🟢 Low | {low} |\n\n",
+        f"**{len(result.comments)}** finding(s); see **Files changed** for inline notes on exact lines.\n\n",
+        "### Findings (quick view)\n\n",
+    ]
+    for idx, c in enumerate(result.comments, start=1):
+        badge = SEVERITY_BADGE.get(c.severity, str(c.severity.value))
+        path = c.file_path.lstrip("/")
+        preview = " ".join(c.suggested_fix.strip().split())
+        if len(preview) > 200:
+            preview = preview[:197] + "…"
+        parts.append(
+            f"{idx}. {badge} · **{c.issue_type}** · `{path}:{c.line_number}`  \n"
+            f"   {preview}\n\n"
+        )
+    parts.append(BOT_FOOTER)
+    return "".join(parts)
 
 
 class GitHubReviewPublisher:
