@@ -21,6 +21,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail || `Request failed: ${response.status}`)
   }
 
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      `API returned non-JSON (status ${response.status}). Set VITE_API_BASE_URL to your Render API URL in Vercel and redeploy.`,
+    )
+  }
+
   return response.json() as Promise<T>
 }
 

@@ -120,14 +120,18 @@ async def github_webhook(
         )
 
     head_sha = pr_event.pull_request.head.sha
-    try:
-        idempotency = ReviewIdempotencyLock(settings)
-        if not idempotency.try_acquire(pr_event.repository.full_name, head_sha):
-            return WebhookAcceptedResponse(
-                message="Duplicate webhook for this commit; review already queued or completed",
-                pull_request_id=None,
-            )
+    repository = pr_event.repository.full_name
+    idempotency = ReviewIdempotencyLock(settings)
+    lock_acquired = False
 
+    if not idempotency.try_acquire(repository, head_sha):
+        return WebhookAcceptedResponse(
+            message="Duplicate webhook for this commit; review already queued or completed",
+            pull_request_id=None,
+        )
+
+    lock_acquired = True
+    try:
         pr_service = _get_pull_request_service(settings)
         session_factory: async_sessionmaker[AsyncSession] = get_session_factory()
         async with session_factory() as session:
@@ -141,11 +145,15 @@ async def github_webhook(
         process_pr_review.delay(
             record_id=str(record.id),
             installation_id=pr_event.installation.id,
-            repository_full_name=pr_event.repository.full_name,
+            repository_full_name=repository,
             pr_number=pr_event.number,
             head_sha=head_sha,
         )
+    except HTTPException:
+        idempotency.release(repository, head_sha)
+        raise
     except redis.RedisError as exc:
+        idempotency.release(repository, head_sha)
         logger.exception(
             "Webhook failed: Redis error (check REDIS_URL uses rediss:// for Upstash): %s",
             exc,
@@ -155,6 +163,7 @@ async def github_webhook(
             detail="Redis unavailable; cannot queue review",
         ) from exc
     except (OperationalError, CeleryError) as exc:
+        idempotency.release(repository, head_sha)
         logger.exception(
             "Webhook failed: Celery broker error (check CELERY_BROKER_URL uses rediss://): %s",
             exc,
@@ -164,10 +173,18 @@ async def github_webhook(
             detail="Task queue unavailable; cannot enqueue review",
         ) from exc
     except SQLAlchemyError as exc:
+        idempotency.release(repository, head_sha)
         logger.exception("Webhook failed: database error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error while saving pull request",
+        ) from exc
+    except Exception as exc:
+        idempotency.release(repository, head_sha)
+        logger.exception("Webhook failed: unexpected error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error processing webhook",
         ) from exc
 
     logger.info(
