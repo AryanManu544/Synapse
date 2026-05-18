@@ -3,8 +3,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from sqlalchemy.engine import make_url
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
+from sqlalchemy.engine import make_url
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -33,6 +34,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     engine = get_async_engine(settings)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        table_names = await conn.run_sync(
+            lambda sync_conn: inspect(sync_conn).get_table_names()
+        )
+    logger.info("Database tables present: %s", ", ".join(sorted(table_names)) or "(none)")
+    if "pull_requests" not in table_names:
+        logger.error(
+            "Table pull_requests is missing. Run backend/scripts/supabase_schema.sql "
+            "in the Supabase SQL Editor, then redeploy."
+        )
 
     session_factory = get_session_factory()
     async with session_factory() as session:

@@ -175,9 +175,13 @@ async def github_webhook(
     except SQLAlchemyError as exc:
         idempotency.release(repository, head_sha)
         logger.exception("Webhook failed: database error: %s", exc)
+        cause = getattr(exc, "__cause__", None) or getattr(exc, "orig", None)
+        detail = "Database error while saving pull request"
+        if cause is not None:
+            detail = f"{detail}: {cause}"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error while saving pull request",
+            detail=detail,
         ) from exc
     except Exception as exc:
         idempotency.release(repository, head_sha)
