@@ -1,5 +1,3 @@
--- Run once in Supabase → SQL Editor (uses direct connection, not the pooler).
--- Required because transaction pooler (port 6543) cannot reliably run DDL.
 
 CREATE TABLE IF NOT EXISTS pull_requests (
     id UUID PRIMARY KEY,
@@ -42,9 +40,31 @@ CREATE TABLE IF NOT EXISTS review_rule_config (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO review_rule_config (id)
-VALUES (1)
-ON CONFLICT (id) DO NOTHING;
+-- Fix partial rows created by an earlier failed migration (NULL booleans).
+UPDATE review_rule_config
+SET
+    focus_security = COALESCE(focus_security, TRUE),
+    focus_performance = COALESCE(focus_performance, TRUE),
+    focus_strict_typing = COALESCE(focus_strict_typing, TRUE),
+    focus_logic = COALESCE(focus_logic, TRUE),
+    updated_at = COALESCE(updated_at, NOW())
+WHERE id = 1;
+
+INSERT INTO review_rule_config (
+    id,
+    focus_security,
+    focus_performance,
+    focus_strict_typing,
+    focus_logic,
+    updated_at
+)
+VALUES (1, TRUE, TRUE, TRUE, TRUE, NOW())
+ON CONFLICT (id) DO UPDATE SET
+    focus_security = EXCLUDED.focus_security,
+    focus_performance = EXCLUDED.focus_performance,
+    focus_strict_typing = EXCLUDED.focus_strict_typing,
+    focus_logic = EXCLUDED.focus_logic,
+    updated_at = EXCLUDED.updated_at;
 
 CREATE TABLE IF NOT EXISTS review_findings (
     id UUID PRIMARY KEY,
