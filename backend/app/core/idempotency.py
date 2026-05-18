@@ -1,8 +1,7 @@
 import logging
 
-import redis
-
 from app.core.config import Settings
+from app.core.redis_client import create_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +12,7 @@ class ReviewIdempotencyLock:
     """Redis-backed lock to prevent duplicate processing of the same commit SHA."""
 
     def __init__(self, settings: Settings) -> None:
-        self._client = redis.Redis.from_url(
-            str(settings.redis_url),
-            decode_responses=True,
-        )
+        self._client = create_redis_client(settings)
         self._processing_ttl = settings.review_lock_processing_ttl_seconds
         self._completed_ttl = settings.review_lock_completed_ttl_seconds
 

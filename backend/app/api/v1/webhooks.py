@@ -2,8 +2,12 @@ import json
 import logging
 from typing import Annotated
 
+import redis
+from celery.exceptions import CeleryError
 from fastapi import APIRouter, Header, HTTPException, Request, status
+from kombu.exceptions import OperationalError
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -116,30 +120,55 @@ async def github_webhook(
         )
 
     head_sha = pr_event.pull_request.head.sha
-    idempotency = ReviewIdempotencyLock(settings)
-    if not idempotency.try_acquire(pr_event.repository.full_name, head_sha):
-        return WebhookAcceptedResponse(
-            message="Duplicate webhook for this commit; review already queued or completed",
-            pull_request_id=None,
-        )
+    try:
+        idempotency = ReviewIdempotencyLock(settings)
+        if not idempotency.try_acquire(pr_event.repository.full_name, head_sha):
+            return WebhookAcceptedResponse(
+                message="Duplicate webhook for this commit; review already queued or completed",
+                pull_request_id=None,
+            )
 
-    pr_service = _get_pull_request_service(settings)
-    session_factory: async_sessionmaker[AsyncSession] = get_session_factory()
-    async with session_factory() as session:
-        record = await pr_service.upsert_from_webhook(
-            session,
-            event=pr_event,
-            delivery_id=x_github_delivery,
-            event_type=x_github_event or "pull_request",
-        )
+        pr_service = _get_pull_request_service(settings)
+        session_factory: async_sessionmaker[AsyncSession] = get_session_factory()
+        async with session_factory() as session:
+            record = await pr_service.upsert_from_webhook(
+                session,
+                event=pr_event,
+                delivery_id=x_github_delivery,
+                event_type=x_github_event or "pull_request",
+            )
 
-    process_pr_review.delay(
-        record_id=str(record.id),
-        installation_id=pr_event.installation.id,
-        repository_full_name=pr_event.repository.full_name,
-        pr_number=pr_event.number,
-        head_sha=head_sha,
-    )
+        process_pr_review.delay(
+            record_id=str(record.id),
+            installation_id=pr_event.installation.id,
+            repository_full_name=pr_event.repository.full_name,
+            pr_number=pr_event.number,
+            head_sha=head_sha,
+        )
+    except redis.RedisError as exc:
+        logger.exception(
+            "Webhook failed: Redis error (check REDIS_URL uses rediss:// for Upstash): %s",
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis unavailable; cannot queue review",
+        ) from exc
+    except (OperationalError, CeleryError) as exc:
+        logger.exception(
+            "Webhook failed: Celery broker error (check CELERY_BROKER_URL uses rediss://): %s",
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Task queue unavailable; cannot enqueue review",
+        ) from exc
+    except SQLAlchemyError as exc:
+        logger.exception("Webhook failed: database error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error while saving pull request",
+        ) from exc
 
     logger.info(
         "Enqueued Celery review task: %s#%s action=%s record_id=%s head=%s",

@@ -47,16 +47,7 @@ class PullRequestRecord(Base):
     diff_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     review_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="pending", index=True
-    )
-    ai_comments_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    review_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    review_completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-    review_status: Mapped[str] = mapped_column(
-        String(16),
+        String(32),
         nullable=False,
         default="pending",
         index=True,
