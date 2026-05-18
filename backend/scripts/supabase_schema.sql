@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     delivery_id VARCHAR(64),
     event_type VARCHAR(64) NOT NULL,
     action VARCHAR(32) NOT NULL,
-    github_pr_id INTEGER NOT NULL,
+    github_pr_id BIGINT NOT NULL,
     pr_number INTEGER NOT NULL,
     repository_full_name VARCHAR(255) NOT NULL,
     installation_id INTEGER,

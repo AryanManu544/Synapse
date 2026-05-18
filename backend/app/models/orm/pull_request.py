@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +30,7 @@ class PullRequestRecord(Base):
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    github_pr_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    github_pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     pr_number: Mapped[int] = mapped_column(Integer, nullable=False)
     repository_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     installation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
