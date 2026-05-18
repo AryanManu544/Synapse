@@ -1,6 +1,5 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
-# Deploy: Dashboard → New → Blueprint → connect this repo.
-# Set secrets when prompted (DATABASE_URL, Redis, GitHub, OpenAI, CORS_ORIGINS).
+# Free tier: Background Workers are not available — API runs Celery via backend/start.sh.
 
 envVarGroups:
   - name: synapse-backend
@@ -11,7 +10,6 @@ envVarGroups:
         value: "false"
       - key: LOG_FORMAT
         value: json
-      # Supabase (recommended): set these and leave DATABASE_URL unset on Render.
       - key: DB_HOST
         sync: false
       - key: DB_PORT
@@ -34,7 +32,6 @@ envVarGroups:
         sync: false
       - key: GITHUB_APP_ID
         sync: false
-      # base64 -i your-app.private-key.pem | tr -d '\n'
       - key: GITHUB_APP_PRIVATE_KEY_B64
         sync: false
       - key: OPENAI_API_KEY
@@ -53,16 +50,5 @@ services:
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     healthCheckPath: /api/v1/health
-    envVars:
-      - fromGroup: synapse-backend
-
-  - type: worker
-    name: synapse-celery
-    runtime: docker
-    plan: free
-    region: oregon
-    dockerfilePath: backend/Dockerfile
-    dockerContext: backend
-    dockerCommand: celery -A app.celery_app worker --loglevel=info -Q reviews
     envVars:
       - fromGroup: synapse-backend

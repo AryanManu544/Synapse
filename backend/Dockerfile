@@ -44,6 +44,9 @@ RUN apt-get update \
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=synapse:synapse main.py ./
 COPY --chown=synapse:synapse app ./app
+COPY --chown=synapse:synapse start.sh ./start.sh
+
+RUN chmod +x /app/start.sh
 
 USER synapse
 
@@ -52,4 +55,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8000\")}/api/v1/health')" || exit 1
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips \"*\""]
+CMD ["/app/start.sh"]
