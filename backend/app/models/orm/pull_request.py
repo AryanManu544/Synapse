@@ -1,11 +1,21 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.orm.base import Base
+from app.models.schemas.code_review import ReviewStatus
 
 
 class PullRequestRecord(Base):
@@ -13,6 +23,10 @@ class PullRequestRecord(Base):
 
     __tablename__ = "pull_requests"
     __table_args__ = (
+        CheckConstraint(
+            "review_status IN ('pending', 'reviewed', 'failed')",
+            name="ck_pull_requests_review_status",
+        ),
         UniqueConstraint(
             "repository_full_name",
             "pr_number",
@@ -46,7 +60,7 @@ class PullRequestRecord(Base):
     diff_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     diff_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    review_status: Mapped[str] = mapped_column(
+    review_status: Mapped[ReviewStatus] = mapped_column(
         String(32),
         nullable=False,
         default="pending",

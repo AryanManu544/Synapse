@@ -3,14 +3,14 @@ import logging
 from typing import Annotated
 
 import redis
-from celery.exceptions import CeleryError
+from celery.exceptions import CeleryError  # type: ignore[import-untyped]
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
-from kombu.exceptions import OperationalError
+from kombu.exceptions import OperationalError  # type: ignore[import-untyped]
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.core.deps import SettingsDep, get_session_factory
 from app.core.idempotency import ReviewIdempotencyLock
 from app.core.security import verify_github_webhook_signature
@@ -20,7 +20,7 @@ from app.models.schemas.github_webhook import (
     PullRequestWebhookAction,
 )
 from app.models.schemas.webhook import WebhookAcceptedResponse
-from app.services.github_service import GitHubService
+from app.services.github_client import GitHubService
 from app.services.pull_request_service import PullRequestService
 from app.tasks.review_runner import execute_pr_review
 from app.tasks.review_tasks import process_pr_review
@@ -124,15 +124,12 @@ async def github_webhook(
     head_sha = pr_event.pull_request.head.sha
     repository = pr_event.repository.full_name
     idempotency = ReviewIdempotencyLock(settings)
-    lock_acquired = False
-
     if not idempotency.try_acquire(repository, head_sha):
         return WebhookAcceptedResponse(
             message="Duplicate webhook for this commit; review already queued or completed",
             pull_request_id=None,
         )
 
-    lock_acquired = True
     try:
         pr_service = _get_pull_request_service(settings)
         session_factory: async_sessionmaker[AsyncSession] = get_session_factory()
@@ -144,17 +141,23 @@ async def github_webhook(
                 event_type=x_github_event or "pull_request",
             )
 
-        review_kwargs = {
-            "record_id": str(record.id),
-            "installation_id": pr_event.installation.id,
-            "repository_full_name": repository,
-            "pr_number": pr_event.number,
-            "head_sha": head_sha,
-        }
         if settings.run_reviews_inline:
-            background_tasks.add_task(execute_pr_review, **review_kwargs)
+            background_tasks.add_task(
+                execute_pr_review,
+                record_id=str(record.id),
+                installation_id=pr_event.installation.id,
+                repository_full_name=repository,
+                pr_number=pr_event.number,
+                head_sha=head_sha,
+            )
         else:
-            process_pr_review.delay(**review_kwargs)
+            process_pr_review.delay(
+                record_id=str(record.id),
+                installation_id=pr_event.installation.id,
+                repository_full_name=repository,
+                pr_number=pr_event.number,
+                head_sha=head_sha,
+            )
     except HTTPException:
         idempotency.release(repository, head_sha)
         raise

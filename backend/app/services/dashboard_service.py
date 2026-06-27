@@ -1,5 +1,4 @@
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +53,7 @@ class DashboardService:
                 title=record.title,
                 author_login=record.author_login,
                 head_ref=record.head_ref,
-                review_status=record.review_status,  # type: ignore[arg-type]
+                review_status=record.review_status,
                 ai_comments_count=record.ai_comments_count,
                 html_url=record.html_url,
                 created_at=record.created_at,

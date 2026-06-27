@@ -1,7 +1,5 @@
-"""Abstract base for service-layer classes."""
-
-from abc import ABC
+"""Base marker for service-layer classes."""
 
 
-class BaseService(ABC):
+class BaseService:
     """Marker base class for domain services."""

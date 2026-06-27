@@ -5,11 +5,12 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import quote_plus
 
-LogFormat = Literal["json", "text"]
-
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
+
+LogFormat = Literal["json", "text"]
+GITHUB_WEBHOOK_PLACEHOLDER = "whsec_your_github_webhook_secret_here"
 
 
 class Settings(BaseSettings):
@@ -44,10 +45,20 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str = ""
     db_name: str = "postgres"
+    db_pool_size_async: int = 3
+    db_pool_size_sync: int = 2
 
     redis_url: str = Field(default="redis://localhost:6379/0")
     celery_broker_url: str = ""
     celery_result_backend: str = ""
+    celery_worker_concurrency: int = Field(
+        default=2,
+        validation_alias=AliasChoices(
+            "celery_worker_concurrency",
+            "CELERY_WORKER_CONCURRENCY",
+            "CELERYD_CONCURRENCY",
+        ),
+    )
 
     review_lock_processing_ttl_seconds: int = 3_600
     review_lock_completed_ttl_seconds: int = 86_400
@@ -65,7 +76,7 @@ class Settings(BaseSettings):
     # OpenAI-compatible base URL for Groq (https://api.groq.com/openai/v1).
     groq_api_base: str = "https://api.groq.com/openai/v1"
 
-    llm_default_provider: Literal["openai", "anthropic", "groq"] = "openai"
+    llm_default_provider: Literal["openai", "groq"] = "openai"
     llm_default_model: str = "gpt-4o"
     llm_max_retries: int = 3
     llm_retry_base_delay_seconds: float = 1.0
@@ -128,6 +139,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def assemble_and_validate_urls(self) -> Settings:
+        if (
+            not self.github_webhook_secret.strip()
+            or self.github_webhook_secret == GITHUB_WEBHOOK_PLACEHOLDER
+        ):
+            raise ValueError(
+                "GitHub webhook secret missing or still a placeholder. Set "
+                "GITHUB_WEBHOOK_SECRET from your GitHub App settings page."
+            )
+
+        if not self.github_app_id.strip():
+            raise ValueError(
+                "GitHub App ID missing. Set GITHUB_APP_ID from your GitHub App settings page."
+            )
+
+        if self.llm_default_provider == "openai" and not self.openai_api_key.strip():
+            raise ValueError("OPENAI_API_KEY is required when LLM_DEFAULT_PROVIDER=openai.")
+
+        if self.llm_default_provider == "groq" and not self.groq_api_key.strip():
+            raise ValueError("GROQ_API_KEY is required when LLM_DEFAULT_PROVIDER=groq.")
+
         if self.db_password and self.db_host:
             self.database_url = self._build_database_url(
                 host=self.db_host,

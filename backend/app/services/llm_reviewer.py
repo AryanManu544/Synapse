@@ -15,7 +15,10 @@ from app.services.base import BaseService
 
 logger = logging.getLogger(__name__)
 
-DIFF_GIT_HEADER_RE: Final[re.Pattern[str]] = re.compile(r"^diff --git a/(.+?) b/(.+?)$", re.MULTILINE)
+DIFF_GIT_HEADER_RE: Final[re.Pattern[str]] = re.compile(
+    r"^diff --git a/(.+?) b/(.+?)$",
+    re.MULTILINE,
+)
 
 EXCLUDED_BASENAMES: Final[frozenset[str]] = frozenset(
     {
@@ -28,12 +31,12 @@ EXCLUDED_BASENAMES: Final[frozenset[str]] = frozenset(
 
 EXCLUDED_SUFFIXES: Final[tuple[str, ...]] = (".svg",)
 
-SYSTEM_PROMPT: Final[str] = """You are a strict Principal Software Engineer performing a production code review.
+SYSTEM_PROMPT: Final[str] = """You are a strict Principal Software Engineer reviewing code.
 
 Your mandate:
-- Identify security flaws (injection, authz/authn gaps, secret exposure, unsafe deserialization, etc.).
-- Identify performance bottlenecks (N+1 queries, unnecessary allocations, blocking I/O in hot paths, etc.).
-- Identify logical bugs (incorrect conditionals, race conditions, off-by-one errors, null/undefined mishandling).
+- Identify security flaws (injection, authz/authn gaps, secret exposure, unsafe parsing, etc.).
+- Identify performance bottlenecks (N+1 queries, extra allocations, blocking I/O, etc.).
+- Identify logical bugs (bad conditionals, races, off-by-one errors, null mishandling).
 
 Rules:
 - Only comment on issues evidenced by the provided diff. Do not speculate about code you cannot see.
@@ -292,8 +295,6 @@ class LLMReviewer(BaseService):
     def _invoke_structured_review(self, diff: str, *, repair_mode: bool) -> CodeReviewResult:
         if self._settings.llm_default_provider == "groq":
             return self._invoke_groq_json(diff, repair_mode=repair_mode)
-        if self._settings.llm_default_provider == "anthropic":
-            raise LLMReviewerError("Anthropic is not implemented; use openai or groq.")
         return self._invoke_openai_parse(diff, repair_mode=repair_mode)
 
     def _invoke_openai_parse(self, diff: str, *, repair_mode: bool) -> CodeReviewResult:
@@ -367,7 +368,8 @@ def _build_user_prompt(diff: str, *, repair_mode: bool) -> str:
             f"```diff\n{diff}\n```"
         )
     return (
-        "Review the following pull request diff. Return structured JSON with a `comments` array.\n\n"
+        "Review the following pull request diff. "
+        "Return structured JSON with a `comments` array.\n\n"
         f"```diff\n{diff}\n```"
     )
 

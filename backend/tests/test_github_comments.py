@@ -1,5 +1,5 @@
 from app.models.schemas.code_review import CodeReviewResult, ReviewComment, ReviewSeverity
-from app.services.github import (
+from app.services.github_client import (
     BOT_NAME,
     format_review_comment_body,
     format_review_summary_body,

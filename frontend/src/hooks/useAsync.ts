@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { isApiResponseValidationError } from '../lib/api'
+
+const API_RESPONSE_FORMAT_MESSAGE = 'API response format changed — please refresh'
+
 export type AsyncState<T> =
   | { status: 'idle' | 'loading' }
   | { status: 'success'; data: T }
@@ -25,7 +29,11 @@ export function useAsync<T>(loader: () => Promise<T>) {
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Something went wrong'
+          const message = isApiResponseValidationError(error)
+            ? API_RESPONSE_FORMAT_MESSAGE
+            : error instanceof Error
+              ? error.message
+              : 'Something went wrong'
           setState({ status: 'error', message })
         }
       }

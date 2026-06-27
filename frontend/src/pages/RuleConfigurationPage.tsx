@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Check, Loader2, Shield, Gauge, Braces, Bug } from 'lucide-react'
 
 import { LoadingState } from '../components/LoadingState'
-import { fetchReviewRules, updateReviewRules } from '../lib/api'
+import { fetchReviewRules, isApiResponseValidationError, updateReviewRules } from '../lib/api'
 import type { ReviewRules } from '../types/dashboard'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+const API_RESPONSE_FORMAT_MESSAGE = 'API response format changed — please refresh'
 
 interface RuleToggleProps {
   id: keyof Omit<ReviewRules, 'updated_at'>
@@ -60,7 +61,13 @@ export function RuleConfigurationPage() {
         if (!cancelled) setRules(data)
       } catch (error) {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load rules')
+          setLoadError(
+            isApiResponseValidationError(error)
+              ? API_RESPONSE_FORMAT_MESSAGE
+              : error instanceof Error
+                ? error.message
+                : 'Failed to load rules',
+          )
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -95,7 +102,13 @@ export function RuleConfigurationPage() {
       setTimeout(() => setSaveState('idle'), 2000)
     } catch (error) {
       setSaveState('error')
-      setSaveError(error instanceof Error ? error.message : 'Failed to save rules')
+      setSaveError(
+        isApiResponseValidationError(error)
+          ? API_RESPONSE_FORMAT_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : 'Failed to save rules',
+      )
     }
   }
 

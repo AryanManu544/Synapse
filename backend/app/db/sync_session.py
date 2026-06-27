@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import get_settings
 from app.core.database import psycopg_connect_args
 
+# Pool defaults are split 3 async + 2 sync = 5 total base connections,
+# matching the Supabase free tier connection limit.
 
 def _to_sync_database_url(async_url: str) -> str:
     """Convert async SQLAlchemy URL to a sync driver URL."""
@@ -21,7 +23,13 @@ def _to_sync_database_url(async_url: str) -> str:
 def get_sync_engine() -> Engine:
     settings = get_settings()
     database_url = _to_sync_database_url(str(settings.database_url))
-    engine_kwargs: dict = {"pool_pre_ping": True}
+    engine_kwargs: dict[str, object] = {
+        "pool_pre_ping": True,
+        "pool_size": settings.db_pool_size_sync,
+        "max_overflow": 1,
+        "pool_timeout": 10,
+        "pool_recycle": 1800,
+    }
     if connect_args := psycopg_connect_args(str(settings.database_url)):
         engine_kwargs["connect_args"] = connect_args
     return create_engine(database_url, **engine_kwargs)

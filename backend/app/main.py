@@ -9,11 +9,10 @@ from sqlalchemy.engine import make_url
 
 from app.api.v1.router import api_router
 from app.core.config import settings
-from app.core.deps import get_async_engine
+from app.core.deps import get_async_engine, get_session_factory
 from app.core.logging import configure_logging
-from app.models.orm.base import Base
-from app.core.deps import get_session_factory
 from app.models.orm import pull_request, review_finding, review_rules  # noqa: F401
+from app.models.orm.base import Base
 from app.services.dashboard_service import seed_default_rules
 
 logger = logging.getLogger(__name__)

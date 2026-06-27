@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.orm.pull_request import PullRequestRecord
 from app.models.schemas.github_webhook import GitHubPullRequestWebhookEvent
-from app.services.github_service import GitHubService, GitHubServiceError
+from app.services.github_client import GitHubService, GitHubServiceError
 
 logger = logging.getLogger(__name__)
 

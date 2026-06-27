@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -15,7 +16,7 @@ def _sign(body: bytes, secret: str) -> str:
     return f"sha256={digest}"
 
 
-def test_github_webhook_rejects_invalid_signature(monkeypatch) -> None:
+def test_github_webhook_rejects_invalid_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", "test-secret")
     get_settings.cache_clear()
 
@@ -34,7 +35,7 @@ def test_github_webhook_rejects_invalid_signature(monkeypatch) -> None:
     get_settings.cache_clear()
 
 
-def test_github_webhook_accepts_ping_event(monkeypatch) -> None:
+def test_github_webhook_accepts_ping_event(monkeypatch: pytest.MonkeyPatch) -> None:
     secret = "test-secret"
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", secret)
     get_settings.cache_clear()

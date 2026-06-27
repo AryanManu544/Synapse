@@ -1,12 +1,13 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 IssueType = Literal["security", "performance", "typing", "logic"]
+ReviewStatus = Literal["pending", "reviewed", "failed"]
 
 
-class ReviewSeverity(str, Enum):
+class ReviewSeverity(StrEnum):
     """Severity level for a code review comment."""
 
     LOW = "Low"

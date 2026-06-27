@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 .env.deploy.example
+.env.example
+*.pem
 # Python
 __pycache__/
 *.py[cod]

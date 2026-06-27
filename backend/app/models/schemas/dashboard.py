@@ -1,10 +1,9 @@
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-ReviewStatus = Literal["pending", "reviewed", "failed"]
+from app.models.schemas.code_review import ReviewStatus
 
 
 class PullRequestSummary(BaseModel):

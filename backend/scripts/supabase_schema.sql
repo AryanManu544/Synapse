@@ -23,13 +23,28 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     review_completed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_pull_requests_repo_number_head UNIQUE (repository_full_name, pr_number, head_sha)
+    CONSTRAINT uq_pull_requests_repo_number_head UNIQUE (repository_full_name, pr_number, head_sha),
+    CONSTRAINT ck_pull_requests_review_status
+        CHECK (review_status IN ('pending', 'reviewed', 'failed'))
 );
 
 CREATE INDEX IF NOT EXISTS ix_pull_requests_delivery_id ON pull_requests (delivery_id);
 CREATE INDEX IF NOT EXISTS ix_pull_requests_github_pr_id ON pull_requests (github_pr_id);
 CREATE INDEX IF NOT EXISTS ix_pull_requests_repository_full_name ON pull_requests (repository_full_name);
 CREATE INDEX IF NOT EXISTS ix_pull_requests_review_status ON pull_requests (review_status);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'ck_pull_requests_review_status'
+    ) THEN
+        ALTER TABLE pull_requests
+            ADD CONSTRAINT ck_pull_requests_review_status
+            CHECK (review_status IN ('pending', 'reviewed', 'failed'));
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS review_rule_config (
     id INTEGER PRIMARY KEY DEFAULT 1,
@@ -79,6 +94,8 @@ CREATE TABLE IF NOT EXISTS review_findings (
 CREATE INDEX IF NOT EXISTS ix_review_findings_pull_request_id ON review_findings (pull_request_id);
 CREATE INDEX IF NOT EXISTS ix_review_findings_issue_type ON review_findings (issue_type);
 CREATE INDEX IF NOT EXISTS ix_review_findings_created_at ON review_findings (created_at);
+CREATE INDEX IF NOT EXISTS ix_review_findings_created_type
+    ON review_findings (created_at, issue_type);
 
 ALTER TABLE pull_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE review_rule_config DISABLE ROW LEVEL SECURITY;

@@ -8,14 +8,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.idempotency import ReviewIdempotencyLock
 from app.db.sync_session import get_sync_session_factory
 from app.models.orm.pull_request import PullRequestRecord
 from app.models.schemas.code_review import CodeReviewResult
-from app.services.github import GitHubReviewPublisher
-from app.services.github_service import GitHubService, GitHubServiceError
+from app.services.github_client import GitHubReviewPublisher, GitHubService, GitHubServiceError
 from app.services.llm_reviewer import LLMReviewer, LLMReviewerError
 from app.services.review_persistence import (
     filter_comments_by_rules,
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 def _persist_diff(
-    session_factory: Any,
+    session_factory: sessionmaker[Session],
     record_id: str,
     diff_content: str,
 ) -> None:

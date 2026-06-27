@@ -16,7 +16,7 @@ def test_json_log_formatter_outputs_valid_json() -> None:
         exc_info=None,
         func="test_json_log_formatter_outputs_valid_json",
     )
-    record.github_event = "pull_request"  # type: ignore[attr-defined]
+    record.__dict__["github_event"] = "pull_request"
 
     payload = json.loads(formatter.format(record))
 

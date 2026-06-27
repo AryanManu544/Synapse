@@ -77,7 +77,15 @@ def test_parse_fallback_json_valid() -> None:
 
 def test_parse_fallback_json_strips_markdown_fence() -> None:
     raw = """```json
-{"comments": [{"file_path": "a.py", "line_number": 2, "severity": "Low", "issue_type": "logic", "suggested_fix": "nit"}]}
+{
+  "comments": [{
+    "file_path": "a.py",
+    "line_number": 2,
+    "severity": "Low",
+    "issue_type": "logic",
+    "suggested_fix": "nit"
+  }]
+}
 ```"""
     result = _parse_fallback_json(raw)
     assert result.comments[0].line_number == 2
