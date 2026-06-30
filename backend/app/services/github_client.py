@@ -149,8 +149,6 @@ def format_review_summary_body(result: CodeReviewResult) -> str:
         badge = SEVERITY_BADGE.get(c.severity, str(c.severity.value))
         path = c.file_path.lstrip("/")
         preview = " ".join(c.suggested_fix.strip().split())
-        if len(preview) > 200:
-            preview = preview[:197] + "…"
         parts.append(
             f"{idx}. {badge} · **{c.issue_type}** · `{path}:{c.line_number}`  \n"
             f"   {preview}\n\n"
