@@ -53,6 +53,8 @@ jobs:
       CELERY_BROKER_URL: redis://localhost:6379/0
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
       GITHUB_WEBHOOK_SECRET: ci-test-webhook-secret
+      GITHUB_APP_ID: "123456"
+      OPENAI_API_KEY: ci-test-openai-key
       LOG_FORMAT: json
       ENVIRONMENT: staging
 
